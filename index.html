@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Consenso Multimodelo</title>
+<meta name="apple-mobile-web-app-title" content="Consenso">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: cabeçalho + abas. Básico: controles e um gráfico horário de 15 dias rolável. Avançado: cartões diários, detalhe por dia, probabilidades */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#f6f8fa; --ink:#16202b; --muted:#5b6876; --line:#d5dbe2; --line-strong:#9aa6b4;
+  --rain:#1f6fd1; --warm:#d4572a; --cool:#2a8f9d; --cloud:#7a8696; --wind:#6b4fbb;
+  --i1:#8fb8ec; --i2:#1f6fd1; --i3:#7b2fb5; --i4:#c0262d;
+  --ok:#2f8a4e; --warn:#b7791f; --bad:#c2410c; --cold:#2563eb;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --f-data:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f151c; --surface:#17202a; --surface-2:#1c2733; --ink:#e4eaf0; --muted:#94a2b2; --line:#2a3643; --line-strong:#4a5a6b;
+  --rain:#5aa2ff; --warm:#f08a5d; --cool:#4fc1cf; --cloud:#9aa6b4; --wind:#a98bf0;
+  --i1:#5f86b8; --i2:#5aa2ff; --i3:#b77cf0; --i4:#ff6b6b;
+  --ok:#5cc47f; --warn:#e3a944; --bad:#f07a4a; --cold:#7ab0ff;
+  color-scheme:dark;
+}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));padding-block:18px 48px}
+.wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);font-weight:600;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:2rem;line-height:1.05}
+h2{font-size:1.35rem}
+h3{font-size:.95rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.mono{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.err{color:var(--bad)}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;justify-content:space-between}
+.place{display:flex;flex-direction:column;gap:2px;min-width:0}
+.place .coords{font-size:.85rem}
+.status{font-size:.88rem}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;padding-top:4px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+.tab{background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 16px;font-family:var(--f-display);font-size:1.15rem;font-weight:600;color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--rain)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+input,select,button{font:inherit;font-size:.95rem;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+button{cursor:pointer;font-weight:600}
+button.primary{background:var(--rain);border-color:var(--rain);color:#fff}
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--rain);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row > *{flex:1 1 auto}
+.models{display:flex;flex-wrap:wrap;gap:6px 14px}
+.check{flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;color:var(--ink);font-size:.92rem}
+#results{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+#results button{width:100%;text-align:left;font-weight:400}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.8rem;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.sw.box{height:10px;width:10px}
+.sw.dash{background:none;border-top:2px dashed var(--warm);height:0}
+.daychips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.daychip{flex:0 0 auto;font-size:.82rem;padding:6px 10px;border-radius:999px;font-weight:600;white-space:nowrap}
+.daychip[aria-pressed="true"]{background:var(--rain);border-color:var(--rain);color:#fff}
+.scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.strip{display:flex;flex-direction:column;min-width:100%}
+.strip .cb{position:relative}
+.panel-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.hint{font-size:.8rem;color:var(--muted);margin:0}
+.runs{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-family:var(--f-data);font-size:.74rem;padding:3px 8px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted)}
+.chip b{color:var(--ink);font-weight:600}
+.summary{font-size:1.02rem;max-width:80ch;margin:0}
+.days{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(164px,1fr);gap:10px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:7px;cursor:pointer;text-align:left;font-weight:400;scroll-snap-align:start}
+.day[aria-pressed="true"]{border-color:var(--rain);box-shadow:inset 0 0 0 1px var(--rain)}
+.day.far{background:var(--surface-2)}
+.day .dname{font-family:var(--f-display);font-size:1.15rem;font-weight:600;line-height:1}
+.day .ddate{font-size:.78rem;color:var(--muted)}
+.day .cond{font-size:.88rem;font-weight:600;min-height:2.6em;line-height:1.3}
+.temps{display:flex;align-items:baseline;gap:8px}
+.tmax{font-family:var(--f-display);font-size:1.8rem;font-weight:700;color:var(--warm);line-height:1}
+.tmin{font-family:var(--f-display);font-size:1.3rem;font-weight:600;color:var(--cool);line-height:1}
+.small{font-size:.72rem;color:var(--muted)}
+.big{font-family:var(--f-display);font-size:1.6rem;font-weight:700;color:var(--rain);line-height:1}
+.bar{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;background:var(--rain)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:.8rem;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;text-align:right;font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.pill.alta,.pill.ok{color:var(--ok)} .pill.media,.pill.warn{color:var(--warn)} .pill.baixa,.pill.bad{color:var(--bad)}
+.int{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.members{display:flex;flex-direction:column;gap:3px}
+.mrow{display:grid;grid-template-columns:58px 1fr;gap:6px;align-items:center;font-size:.68rem;color:var(--muted)}
+.dots{display:flex;flex-wrap:wrap;gap:1.5px}
+.dots b{width:4px;height:4px;border-radius:50%;background:var(--line)}
+.dots b.on{background:var(--rain)}
+.wind{font-size:.82rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.arrow{display:inline-block;color:var(--wind);font-weight:700}
+.detail{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.detail{grid-template-columns:minmax(0,1fr)}}
+.charts{display:flex;flex-direction:column;gap:16px;min-width:0}
+.chartbox{position:relative;height:210px}
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+td.num{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+td.heat{font-family:var(--f-data);font-variant-numeric:tabular-nums;text-align:center}
+.notes{font-size:.9rem;max-width:82ch}
+.notes li{margin-bottom:4px}
+details summary{cursor:pointer;font-family:var(--f-display);font-size:1.3rem;font-weight:600}
+.tabpane{display:flex;flex-direction:column;gap:16px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="place">
+    <h3>Previsão multimodelo · GFS · ECMWF · ICON</h3>
+    <h1 id="placeName">Escolha um local</h1>
+    <span class="coords muted mono" id="placeCoords">—</span>
+  </div>
+  <div class="status muted" id="status" role="status" aria-live="polite"></div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Seções">
+  <button class="tab" role="tab" id="tab-basico" aria-controls="pane-basico" aria-selected="true" type="button">Básico</button>
+  <button class="tab" role="tab" id="tab-avancado" aria-controls="pane-avancado" aria-selected="false" type="button">Avançado</button>
+</nav>
+
+<!-- ================= BÁSICO ================= -->
+<section class="tabpane" id="pane-basico" role="tabpanel" aria-labelledby="tab-basico">
+  <div class="panel">
+    <div class="controls">
+      <label for="q">Cidade
+        <span class="row">
+          <input id="q" type="search" placeholder="Ex.: Curitiba, Manaus" autocomplete="off">
+          <button id="btnSearch" type="button">Buscar</button>
+        </span>
+      </label>
+      <label for="lat">Lat / Lon
+        <span class="row">
+          <input id="lat" inputmode="decimal" placeholder="-23.55" aria-label="Latitude">
+          <input id="lon" inputmode="decimal" placeholder="-46.63" aria-label="Longitude">
+        </span>
+      </label>
+      <label for="radius">Raio da área
+        <select id="radius">
+          <option value="0">Só o ponto</option>
+          <option value="10">10 km</option>
+          <option value="25" selected>25 km</option>
+          <option value="50">50 km</option>
+        </select>
+      </label>
+      <label for="ndays">Extensão da previsão
+        <select id="ndays">
+          <option value="7">7 dias (mais leve)</option>
+          <option value="10">10 dias</option>
+          <option value="15" selected>15 dias</option>
+        </select>
+      </label>
+      <span class="row">
+        <button id="btnGeo" type="button">Minha localização</button>
+        <button id="btnRun" type="button" class="primary">Atualizar</button>
+      </span>
+    </div>
+    <ul id="results"></ul>
+  </div>
+
+  <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+    <div class="panel-title">
+      <h2 id="basicTitle">Hora a hora</h2>
+      <p class="hint">Arraste para o lado para ver os próximos dias</p>
+    </div>
+    <div class="daychips" id="dayChipsBasic" aria-label="Ir para o dia"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--warm)"></i>Temperatura provável (°C)</span>
+      <span><i class="sw dash"></i>Máxima provável, P90</span>
+      <span><i class="sw box" style="background:var(--i2)"></i>Chuva (mm/h)</span>
+      <span><i class="sw" style="background:var(--ink)"></i>Chance de chuva (%)</span>
+      <span><i class="sw" style="background:var(--wind)"></i>Rajada (km/h)</span>
+    </div>
+    <div class="scroller" id="scroller">
+      <div class="strip" id="strip">
+        <div class="cb" style="height:170px"><canvas id="bTemp"></canvas></div>
+        <div class="cb" style="height:170px"><canvas id="bRain"></canvas></div>
+        <div class="cb" style="height:160px"><canvas id="bWind"></canvas></div>
+      </div>
+    </div>
+    <p class="hint">Marcas em destaque, no máximo uma por dia: calor ≥ 35 °C, frio ≤ 3 °C, chuva forte ≥ 10 mm/h com chance ≥ 30%, rajada ≥ 60 km/h. Toque no gráfico para ver os valores da hora. Valores são o consenso dos ensembles GFS, ECMWF e ICON.</p>
+  </div>
+</section>
+
+<!-- ================= AVANÇADO ================= -->
+<section class="tabpane" id="pane-avancado" role="tabpanel" aria-labelledby="tab-avancado" hidden>
+  <div class="panel">
+    <div class="row" style="gap:16px;align-items:flex-end">
+      <label for="thr" style="flex:0 1 220px">Limiar de chuva diária
+        <select id="thr">
+          <option value="0.2">≥ 0,2 mm (traço)</option>
+          <option value="1" selected>≥ 1 mm</option>
+          <option value="5">≥ 5 mm</option>
+          <option value="10">≥ 10 mm</option>
+          <option value="20">≥ 20 mm</option>
+        </select>
+      </label>
+      <div><h3>Determinísticos</h3><div class="models" id="detModels"></div></div>
+      <div><h3>Ensembles</h3><div class="models" id="ensModels"></div></div>
+    </div>
+  </div>
+
+  <div class="runs" id="runs" aria-label="Rodadas usadas"></div>
+  <p class="summary" id="summary"></p>
+  <div class="days" id="days" aria-label="Previsão diária"></div>
+
+  <section class="panel detail" id="detailPanel" hidden>
+    <div class="charts">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <h2 id="detailTitle">Detalhe horário</h2>
+        <div class="daychips" id="dayChipsAdv" aria-label="Escolher dia"></div>
+      </div>
+      <div>
+        <h3>Temperatura (°C) · faixa P10–P90</h3>
+        <div class="chartbox"><canvas id="cTemp"></canvas></div>
+      </div>
+      <div>
+        <h3>Chuva · chance por hora e intensidade se chover</h3>
+        <div class="legend">
+          <span><i class="int" style="background:var(--i1)"></i>fraca &lt; 2,5 mm/h</span>
+          <span><i class="int" style="background:var(--i2)"></i>moderada 2,5–10</span>
+          <span><i class="int" style="background:var(--i3)"></i>forte 10–50</span>
+          <span><i class="int" style="background:var(--i4)"></i>muito forte &gt; 50</span>
+        </div>
+        <div class="chartbox"><canvas id="cRain"></canvas></div>
+      </div>
+      <div>
+        <h3>Vento (km/h) · médio, rajadas e direção</h3>
+        <div class="chartbox"><canvas id="cWind"></canvas></div>
+      </div>
+      <div>
+        <h3>Nebulosidade (%)</h3>
+        <div class="chartbox"><canvas id="cCloud"></canvas></div>
+      </div>
+    </div>
+    <div class="side">
+      <div><h3>Modelos no dia</h3><div class="tablewrap"><table id="tModels"></table></div></div>
+      <div><h3>Estatísticas do ensemble</h3><div class="tablewrap"><table id="tStats"></table></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="exceedPanel" hidden>
+    <h2>Probabilidades por dia</h2>
+    <p class="muted" style="margin:4px 0 10px">Chuva diária: ponto / área. Chuva forte e rajada: no ponto.</p>
+    <div class="tablewrap"><table id="tExceed"></table></div>
+  </section>
+
+  <section class="panel notes">
+    <details>
+      <summary>Como os números são calculados</summary>
+      <ul>
+        <li><b>Fonte:</b> API pública Open-Meteo. Determinísticos: GFS (até 16 dias), ECMWF IFS 0,25° (15 dias), ICON (7,5 dias). Ensembles: GFS ENS (31 membros, 0,25° até 10 dias e 0,5° depois), ECMWF ENS (51, 15 dias), ICON EPS (40, 7,5 dias). Do dia 8 em diante restam 2 ensembles.</li>
+        <li><b>Rodada:</b> inicialização (UTC) do último ciclo segundo os metadados da Open-Meteo. O chip avisa quando o modelo não tem dados de hoje em diante e fica fora do cálculo.</li>
+        <li><b>Peso:</b> cada ensemble pesa igual, independentemente do número de membros.</li>
+        <li><b>Chance de chuva no ponto:</b> fração média de membros com acumulado diário ≥ limiar. <b>Na área:</b> o membro conta se qualquer um dos 9 pontos (centro + anel no raio) passa do limiar.</li>
+        <li><b>Intensidade:</b> fraca &lt; 2,5 mm/h; moderada 2,5–10; forte 10–50; muito forte &gt; 50. "Se chover" é a mediana da taxa horária entre os membros que chovem. Depois do dia 6 os ensembles têm passo de 3–6 h e suavizam picos.</li>
+        <li><b>Vento:</b> velocidade média e rajada a 10 m. Rajada ≥ 40 km/h = atenção; ≥ 60 = vento forte; ≥ 100 = perigo. Direção é a média vetorial dos membros (de onde sopra); a seta aponta para onde vai.</li>
+        <li><b>Confiança:</b> chuva combina a distância de 50% com a concordância entre ensembles; temperatura usa a amplitude interquartil da Tmáx (&lt; 1,5 °C alta; &lt; 3 °C média).</li>
+        <li>Sem correção de viés com observações.</li>
+      </ul>
+    </details>
+  </section>
+</section>
+
+</div>
+
+<script>
+"use strict";
+/* ================= configuração ================= */
+const DET = [
+  {key:"gfs",   name:"GFS",   ids:["gfs_seamless"],  meta:["ncep_gfs025","ncep_gfs013"]},
+  {key:"ecmwf", name:"ECMWF", ids:["ecmwf_ifs025"],  meta:["ecmwf_ifs025"]},
+  {key:"icon",  name:"ICON",  ids:["icon_seamless"], meta:["dwd_icon"]}
+];
+const ENS = [
+  {key:"gfs",   name:"GFS ENS",   ids:["gfs_seamless","gfs025"], meta:["ncep_gefs025","ncep_gefs05"]},
+  {key:"ecmwf", name:"ECMWF ENS", ids:["ecmwf_ifs025"],          meta:["ecmwf_ifs025_ensemble","ecmwf_ifs025"]},
+  {key:"icon",  name:"ICON EPS",  ids:["icon_seamless"],         meta:["dwd_icon_eps"]}
+];
+const API = "https://api.open-meteo.com", EAPI = "https://ensemble-api.open-meteo.com";
+const VARS = "temperature_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m";
+const K = ["t","p","c","ws","wd","wg"];
+const VK = {t:"temperature_2m", p:"precipitation", c:"cloud_cover", ws:"wind_speed_10m", wd:"wind_direction_10m", wg:"wind_gusts_10m"};
+const EXCEED = [0.2, 1, 5, 10, 20, 50];
+const WD = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+const COMPASS = ["N","NNE","NE","ENE","L","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
+const INTS = [{lim:2.5,l:"fraca",c:"--i1"},{lim:10,l:"moderada",c:"--i2"},{lim:50,l:"forte",c:"--i3"},{lim:Infinity,l:"muito forte",c:"--i4"}];
+const EXT = {hot:35, cold:3, rain:10, rainProb:0.3, gust:60};   // limiares das marcas no gráfico básico
+const PX = 7;                                                   // pixels por hora no gráfico básico
+
+const $ = id => document.getElementById(id);
+const state = {lat:null, lon:null, name:"", days:15, raw:null, data:null, sel:0, charts:{}, used:{}, tab:"basico"};
+
+/* ================= utilidades ================= */
+const ok = v => v!=null && isFinite(v);
+const dec = (v,d) => v.toFixed(d).replace(".", ",");
+const fT = v => ok(v) ? String(Math.round(v)) : "—";
+const fP = v => !ok(v) ? "—" : v<0.05 ? "0" : v<10 ? dec(v,1) : String(Math.round(v));
+const fI = v => ok(v) ? String(Math.round(v)) : "—";
+const pct = v => ok(v) ? Math.round(v*100)+"%" : "—";
+function css(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function store(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function load(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+const NET_HINT = "Sem acesso à internet nesta tela. Visualizadores de arquivo (prévia do app, Arquivos, e-mail) bloqueiam conexões: abra a página por um link https no Safari ou Chrome.";
+const netErr = e => /load failed|failed to fetch|networkerror|network request/i.test(String(e && e.message || e));
+function setStatus(m, err){ const s=$("status"); s.textContent=m; s.className="status "+(err?"err":"muted"); }
+const nulls = n => new Array(n).fill(null);
+const idxMap = t => new Map(t.map((x,i)=>[x,i]));
+const mean = a => { const b=a.filter(ok); return b.length ? b.reduce((s,v)=>s+v,0)/b.length : null; };
+const sd = a => { const b=a.filter(ok); if(b.length<2) return 0; const m=mean(b); return Math.sqrt(b.reduce((s,v)=>s+(v-m)**2,0)/b.length); };
+const frac = (a, f) => { const b=a.filter(ok); return b.length ? b.filter(f).length/b.length : null; };
+function wq(vals, wts, q){
+  const a=[]; for(let i=0;i<vals.length;i++) if(ok(vals[i])) a.push([vals[i],wts[i]]);
+  if(!a.length) return null;
+  a.sort((x,y)=>x[0]-y[0]);
+  const tot=a.reduce((s,x)=>s+x[1],0); let c=0;
+  for(const [v,w] of a){ c+=w; if(c/tot>=q-1e-9) return v; }
+  return a[a.length-1][0];
+}
+function wmean(vals, wts){ let s=0,w=0; for(let i=0;i<vals.length;i++) if(ok(vals[i])){ s+=vals[i]*wts[i]; w+=wts[i]; } return w?s/w:null; }
+function agg(arr, idx, how){
+  const v=[]; for(const i of idx){ const x=arr[i]; if(ok(x)) v.push(x); }
+  if(!v.length) return null;
+  if(how==="max") return Math.max(...v);
+  if(how==="min") return Math.min(...v);
+  const s=v.reduce((a,b)=>a+b,0);
+  return how==="sum" ? s : s/v.length;
+}
+const nValid = (arr, idx) => idx.reduce((n,i)=>n+(ok(arr[i])?1:0),0);
+function uv(ws, wd){ const r=wd*Math.PI/180; return [-ws*Math.sin(r), -ws*Math.cos(r)]; }
+function dirOf(u, v){ if(!ok(u)||!ok(v)||(Math.abs(u)<1e-6&&Math.abs(v)<1e-6)) return null; return (Math.atan2(-u,-v)*180/Math.PI+360)%360; }
+const compass = d => ok(d) ? COMPASS[Math.round(d/22.5)%16] : "—";
+const arrowHTML = d => ok(d) ? `<span class="arrow" style="transform:rotate(${Math.round(d+180)}deg)" aria-hidden="true">↑</span>` : "";
+function intensity(v){ if(!ok(v)||v<0.1) return null; return INTS.find(x=>v<x.lim); }
+function windClass(v){ if(!ok(v)) return "—"; return v<6?"calmo":v<20?"fraco":v<39?"moderado":v<62?"forte":"muito forte"; }
+function localNow(off){ return new Date(Date.now()+off*1000).toISOString().slice(0,16); }
+async function getJSON(url){
+  const r = await fetch(url);
+  if(!r.ok){ let t=""; try{ t=(await r.json()).reason||""; }catch(e){} throw new Error(`HTTP ${r.status} ${t}`.trim()); }
+  return r.json();
+}
+async function tryIds(ids, fn){ let last; for(const id of ids){ try{ return await fn(id); }catch(e){ last=e; } } throw last; }
+function members(h, v){
+  const re = new RegExp("^"+v+"_member\\d+$");
+  return Object.keys(h).filter(k=>k===v||re.test(k)).sort().map(k=>h[k]);
+}
+const dayName = (d,i) => i===0 ? "Hoje" : WD[new Date(d+"T12:00:00").getDay()];
+const dayShort = (d,i) => `${dayName(d,i)} ${d.slice(8,10)}`;
+
+/* ================= requisições ================= */
+async function fetchDet(m, lat, lon, days){
+  return tryIds(m.ids, async id => {
+    const j = await getJSON(`${API}/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=${VARS}&models=${id}&timezone=auto&forecast_days=${Math.min(days,16)}`);
+    const h=j.hourly, n=h.time.length, o={model:m, time:h.time, off:j.utc_offset_seconds||0};
+    K.forEach(k => o[k] = h[VK[k]] || nulls(n));
+    return o;
+  });
+}
+async function fetchEns(m, lat, lon, days){
+  return tryIds(m.ids, async id => {
+    const j = await getJSON(`${EAPI}/v1/ensemble?latitude=${lat}&longitude=${lon}&hourly=${VARS}&models=${id}&timezone=auto&forecast_days=${days}`);
+    const h=j.hourly, n=h.time.length, M={};
+    K.forEach(k => M[k] = members(h, VK[k]));
+    const nm = Math.max(M.t.length, M.p.length);
+    if(!nm) throw new Error("sem membros");
+    const mem = [];
+    for(let i=0;i<nm;i++){ const o={}; K.forEach(k => o[k] = M[k][i] || nulls(n)); mem.push(o); }
+    return {model:m, time:h.time, mem, off:j.utc_offset_seconds||0};
+  });
+}
+async function fetchArea(m, pts, days){
+  const la=pts.map(p=>p[0].toFixed(3)).join(","), lo=pts.map(p=>p[1].toFixed(3)).join(",");
+  return tryIds(m.ids, async id => {
+    let j = await getJSON(`${EAPI}/v1/ensemble?latitude=${la}&longitude=${lo}&hourly=precipitation&models=${id}&timezone=auto&forecast_days=${days}`);
+    if(!Array.isArray(j)) j=[j];
+    return {model:m, points:j.map(r=>({time:r.hourly.time, P:members(r.hourly,"precipitation")}))};
+  });
+}
+async function fetchMeta(m, host){
+  return Promise.any(m.meta.map(async name => {
+    const j = await getJSON(`${host}/data/${name}/static/meta.json`);
+    if(!j.last_run_initialisation_time) throw new Error("sem rodada");
+    return {name:m.name, init:j.last_run_initialisation_time*1000};
+  })).catch(() => ({name:m.name, init:null}));
+}
+function ring(lat, lon, km){
+  if(!km) return [[lat,lon]];
+  const dla=km/111, dlo=km/(111*Math.cos(lat*Math.PI/180)), pts=[[lat,lon]];
+  for(let a=0;a<360;a+=45){ const r=a*Math.PI/180; pts.push([lat+dla*Math.cos(r), lon+dlo*Math.sin(r)]); }
+  return pts;
+}
+
+/* ================= processamento ================= */
+function process(det, ens, area, thr, ndays){
+  const off = (ens[0]||det[0]).off, today = localNow(off).slice(0,10);
+  let master = (ens[0]||det[0]).time.filter(t => t.slice(0,10)>=today);
+  const dates = [...new Set(master.map(t=>t.slice(0,10)))].slice(0, ndays);
+  master = master.filter(t => dates.includes(t.slice(0,10)));
+  const re = (time, arr) => { const mp=idxMap(time); return master.map(t => mp.has(t) ? arr[mp.get(t)] : null); };
+  det.forEach(d => K.forEach(k => d[k] = re(d.time, d[k])));
+  ens.forEach(e => e.mem.forEach(m => K.forEach(k => m[k] = re(e.time, m[k]))));
+  area.forEach(a => a.points.forEach(pt => pt.P = pt.P.map(arr => re(pt.time, arr))));
+  const M = Math.max(1, ens.length);
+
+  const days = dates.map((d, di) => {
+    const H = master.map((t,i)=>t.startsWith(d)?i:-1).filter(i=>i>=0);
+    const minH = Math.min(4, H.length);
+    const P = {tmax:[],tmin:[],psum:[],pmh:[],cm:[],wsx:[],wgx:[],w:[]};
+    let U=0, V=0, UW=0, nEns=0;
+    const perModel = ens.map(e => {
+      const wt = 1/(e.mem.length*M), pm = {name:e.model.name, sums:[], pmh:[], wg:[]};
+      let any=false;
+      e.mem.forEach(m => {
+        const valid = nValid(m.t,H)>=minH, vp = nValid(m.p,H)>=minH;
+        const s = vp ? agg(m.p,H,"sum") : null, mh = vp ? agg(m.p,H,"max") : null, gx = valid ? agg(m.wg,H,"max") : null;
+        if(valid) any=true;
+        P.tmax.push(valid?agg(m.t,H,"max"):null); P.tmin.push(valid?agg(m.t,H,"min"):null);
+        P.psum.push(s); P.pmh.push(mh); P.cm.push(valid?agg(m.c,H,"mean"):null);
+        P.wsx.push(valid?agg(m.ws,H,"max"):null); P.wgx.push(gx); P.w.push(wt);
+        pm.sums.push(s); pm.pmh.push(mh); pm.wg.push(gx);
+        if(valid) for(const i of H) if(ok(m.ws[i])&&ok(m.wd[i])){ const [u,v]=uv(m.ws[i],m.wd[i]); U+=u*wt; V+=v*wt; UW+=wt; }
+      });
+      if(any) nEns++;
+      return pm;
+    });
+    const avg = f => { const v=perModel.map(f).filter(ok); return {p:mean(v), sd:sd(v)}; };
+    const probAt = t => avg(pm => frac(pm.sums, x=>x>=t));
+    const areaAt = t => {
+      const v = area.map(a => {
+        const nm = a.points[0] ? a.points[0].P.length : 0; let hit=0, val=0;
+        for(let k=0;k<nm;k++){
+          let any=false, okk=false;
+          for(const pt of a.points){ const arr=pt.P[k]||[]; if(nValid(arr,H)<minH) continue; okk=true; if(agg(arr,H,"sum")>=t) any=true; }
+          if(okk){ val++; if(any) hit++; }
+        }
+        return val ? hit/val : null;
+      }).filter(ok);
+      return v.length ? mean(v) : null;
+    };
+    const pr = probAt(thr);
+    const fix = (a,b) => (ok(a)&&ok(b)) ? Math.max(a,b) : b;
+    const exceed = EXCEED.map(t => { const a=probAt(t).p; return {point:a, area:fix(a, areaAt(t))}; });
+    const wet = P.psum.map((s,i) => ok(s) && s>=Math.max(thr,0.2) ? P.pmh[i] : null);
+    const detDay = det.map(x => ({name:x.model.name, tmax:agg(x.t,H,"max"), tmin:agg(x.t,H,"min"), p:agg(x.p,H,"sum"), pmh:agg(x.p,H,"max"),
+      c:agg(x.c,H,"mean"), ws:agg(x.ws,H,"max"), wg:agg(x.wg,H,"max")}));
+    const q25=wq(P.tmax,P.w,.25), q75=wq(P.tmax,P.w,.75), iqr=(ok(q25)&&ok(q75))?q75-q25:null;
+    let rConf=null;
+    if(ok(pr.p)){ const sc=0.6*Math.abs(2*pr.p-1)+0.4*(1-Math.min(1,pr.sd/0.35)); rConf = sc>=0.65?"alta":sc>=0.4?"media":"baixa"; }
+    let dir = UW ? dirOf(U/UW, V/UW) : null;
+    if(dir==null){ let u=0,v=0; det.forEach(x=>H.forEach(i=>{ if(ok(x.ws[i])&&ok(x.wd[i])){ const r=uv(x.ws[i],x.wd[i]); u+=r[0]; v+=r[1]; } })); dir=dirOf(u,v); }
+    const mDet = k => mean(detDay.map(x=>x[k]));
+    return {
+      date:d, H, di, nEns,
+      tmax:{p10:wq(P.tmax,P.w,.1), p50:wq(P.tmax,P.w,.5) ?? mDet("tmax"), p90:wq(P.tmax,P.w,.9)},
+      tmin:{p10:wq(P.tmin,P.w,.1), p50:wq(P.tmin,P.w,.5) ?? mDet("tmin"), p90:wq(P.tmin,P.w,.9)},
+      rain:{p50:wq(P.psum,P.w,.5) ?? mDet("p"), p90:wq(P.psum,P.w,.9), mean:wmean(P.psum,P.w) ?? mDet("p")},
+      condInt: wq(wet,P.w,.5),
+      pMod: avg(pm=>frac(pm.pmh,x=>x>=2.5)).p, pStrong: avg(pm=>frac(pm.pmh,x=>x>=10)).p,
+      cloud: wq(P.cm,P.w,.5) ?? mDet("c"),
+      ws: wq(P.wsx,P.w,.5) ?? mDet("ws"), wg50: wq(P.wgx,P.w,.5) ?? mDet("wg"), wg90: wq(P.wgx,P.w,.9),
+      pG40: avg(pm=>frac(pm.wg,x=>x>=40)).p, pG60: avg(pm=>frac(pm.wg,x=>x>=60)).p, dir,
+      prob:pr.p, probSd:pr.sd, area:fix(pr.p, areaAt(thr)), exceed, detDay,
+      perModel: perModel.map(pm => { const v=pm.sums.filter(ok); return {name:pm.name, n:v.length, hit:v.filter(x=>x>=thr).length}; }).filter(x=>x.n),
+      tConf: iqr==null?null:iqr<1.5?"alta":iqr<3?"media":"baixa", rConf, iqr
+    };
+  });
+
+  const hourly = master.map((t,i) => {
+    const vt=[],vp=[],vc=[],vs=[],vg=[],w=[],wet=[]; const probs=[]; let U=0,V=0,UW=0;
+    ens.forEach(e => {
+      const wt=1/(e.mem.length*M); let hit=0, n=0;
+      e.mem.forEach(m => {
+        const p=m.p[i];
+        vt.push(m.t[i]); vp.push(p); vc.push(m.c[i]); vs.push(m.ws[i]); vg.push(m.wg[i]); w.push(wt);
+        wet.push(ok(p)&&p>=0.1 ? p : null);
+        if(ok(p)){ n++; if(p>=0.1) hit++; }
+        if(ok(m.ws[i])&&ok(m.wd[i])){ const r=uv(m.ws[i],m.wd[i]); U+=r[0]*wt; V+=r[1]*wt; UW+=wt; }
+      });
+      if(n) probs.push(hit/n);
+    });
+    const dm = k => mean(det.map(x=>x[k][i]));   // sem ensemble: média dos determinísticos
+    return {t, p10:wq(vt,w,.1), p50:wq(vt,w,.5) ?? dm("t"), p90:wq(vt,w,.9), prob:probs.length?mean(probs):null, pm:wmean(vp,w) ?? dm("p"),
+      wet:wq(wet,w,.5), cloud:wq(vc,w,.5) ?? dm("c"), ws10:wq(vs,w,.1), ws50:wq(vs,w,.5) ?? dm("ws"), ws90:wq(vs,w,.9), wg50:wq(vg,w,.5) ?? dm("wg"), wg90:wq(vg,w,.9),
+      dir: UW ? dirOf(U/UW,V/UW) : null};
+  });
+  return {days, hourly, det, master, thr};
+}
+
+/* ================= textos ================= */
+function condition(d){
+  const p=d.prob, c=d.cloud, it=intensity(d.condInt);
+  if(ok(p)){
+    if(p>=0.7) return it && it.lim>10 ? "Chuva forte provável" : "Chuva provável";
+    if(p>=0.4) return "Pode chover";
+    if(p>=0.2) return ok(c)&&c>60 ? "Nublado, pouca chance de chuva" : "Pouca chance de chuva";
+  }
+  if(!ok(c)) return "—";
+  return c>75?"Nublado":c>40?"Parcialmente nublado":c>15?"Poucas nuvens":"Céu claro";
+}
+function windAlert(d){
+  if((ok(d.pG60)&&d.pG60>=0.3) || (ok(d.wg50)&&d.wg50>=60)) return `<span class="pill bad">Vento forte</span>`;
+  if((ok(d.pG40)&&d.pG40>=0.5) || (ok(d.wg50)&&d.wg50>=40)) return `<span class="pill warn">Rajadas</span>`;
+  return "";
+}
+const conf = c => c==null ? "" : `<span class="pill ${c}">${c==="media"?"média":c}</span>`;
+
+/* ================= gráficos: base ================= */
+function chart(id, cfg){ if(state.charts[id]) state.charts[id].destroy(); state.charts[id]=new Chart($(id), cfg); }
+function opts(y, ext){
+  const ink=css("--muted"), grid=css("--line");
+  const o = {responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:"index",intersect:false},
+    plugins:{legend:{labels:{color:ink,boxWidth:10,font:{size:11},filter:i=>!/^_/.test(i.text)}}},
+    scales:{x:{ticks:{color:ink,maxRotation:0,autoSkip:true,maxTicksLimit:9},grid:{color:grid}},
+            y:{title:{display:!!y,text:y,color:ink},ticks:{color:ink,precision:0},grid:{color:grid}}}};
+  if(ext) ext(o);
+  return o;
+}
+// rótulos de valores extremos, desenhados só nos pontos marcados
+const marksPlugin = {id:"marks", afterDatasetsDraw(ch){
+  const ctx=ch.ctx;
+  ch.data.datasets.forEach((ds,di) => {
+    if(!ds.marks || !ch.isDatasetVisible(di)) return;
+    const meta=ch.getDatasetMeta(di);
+    ds.marks.forEach(m => {
+      const el=meta.data[m.i]; if(!el) return;
+      ctx.save(); ctx.font="600 11px "+css("--f-data"); ctx.textAlign="center"; ctx.fillStyle=m.color;
+      ctx.fillText(m.text, el.x, Math.max(11, el.y-9)); ctx.restore();
+    });
+  });
+}};
+
+/* ================= render: BÁSICO ================= */
+function renderBasic(){
+  const D=state.data; if(!D || state.tab!=="basico") return;
+  const hs=D.hourly, n=hs.length;
+  $("basicTitle").textContent = `Hora a hora · ${D.days.length} dias`;
+  $("strip").style.width = Math.max(n*PX+60, $("scroller").clientWidth) + "px";
+
+  const chips=$("dayChipsBasic"); chips.innerHTML="";
+  D.days.forEach((d,i) => {
+    const b=document.createElement("button"); b.type="button"; b.className="daychip"; b.textContent=dayShort(d.date,i);
+    b.addEventListener("click", () => scrollToDay(i));
+    chips.appendChild(b);
+  });
+  if(typeof Chart==="undefined"){ $("basicTitle").textContent += " (gráfico indisponível)"; return; }
+
+  const labels = hs.map(h=>h.t);
+  const dayIdx = {}; D.days.forEach((d,i)=>dayIdx[d.date]=i);
+  const ink=css("--muted"), grid=css("--line"), strong=css("--line-strong");
+  const warm=css("--warm"), wind=css("--wind"), bad=css("--bad"), cold=css("--cold"), text=css("--ink");
+  const base = (yTitle, ext) => {
+    const o = {responsive:true, maintainAspectRatio:false, animation:false, devicePixelRatio:Math.min(2, window.devicePixelRatio||1),
+      layout:{padding:{top:14, right:6}}, interaction:{mode:"index", intersect:false},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{title:it=>{ const t=labels[it[0].dataIndex]; return `${dayShort(t.slice(0,10), dayIdx[t.slice(0,10)])} · ${t.slice(11,13)}h`; }}}},
+      scales:{
+        x:{ticks:{color:ink, autoSkip:false, maxRotation:0,
+             callback:(v,i)=>{ const t=labels[i]; if(!t) return null; const h=t.slice(11,13); return h==="00" ? dayShort(t.slice(0,10), dayIdx[t.slice(0,10)]) : h==="12" ? "12h" : null; }},
+           grid:{color:c=>{ const t=labels[c.index]; return t && t.slice(11,13)==="00" ? strong : "transparent"; }}},
+        y:{position:"left", title:{display:true,text:yTitle,color:ink}, ticks:{color:ink,precision:0,maxTicksLimit:5}, grid:{color:grid}}}};
+    if(ext) ext(o);
+    return o;
+  };
+
+  // marcas: no máximo uma por dia e por variável
+  const perDay = (score, test, mk) => { const out=[]; D.days.forEach(d => {
+    let best=-1, bv=-Infinity; d.H.forEach(i => { const v=score(hs[i]); if(ok(v) && v>bv){ bv=v; best=i; } });
+    if(best>=0 && test(hs[best])) out.push(mk(best, hs[best])); }); return out; };
+  const hot = perDay(h=>h.p50, h=>h.p50>=EXT.hot, (i,h)=>({i, text:fT(h.p50)+"°", color:bad}));
+  const cld = perDay(h=>ok(h.p50)?-h.p50:null, h=>h.p50<=EXT.cold, (i,h)=>({i, text:fT(h.p50)+"°", color:cold}));
+  const rmk = perDay(h=>ok(h.prob)&&h.prob>=EXT.rainProb ? h.wet : null, h=>h.wet>=EXT.rain, (i,h)=>({i, text:fP(h.wet)+" mm/h", color:css(intensity(h.wet).c)}));
+  const gmk = perDay(h=>h.wg50, h=>h.wg50>=EXT.gust, (i,h)=>({i, text:fI(h.wg50), color:bad}));
+  const pts = (marks, color) => { const r=new Array(n).fill(0), c=new Array(n).fill(color); marks.forEach(m=>{ r[m.i]=4; c[m.i]=m.color; }); return {pointRadius:r, pointBackgroundColor:c, pointBorderWidth:0, pointHoverRadius:3}; };
+  const tMarks = [...hot, ...cld];
+
+  chart("bTemp", {type:"line", data:{labels, datasets:[
+    {label:"Temperatura provável", data:hs.map(h=>h.p50), borderColor:warm, borderWidth:2, spanGaps:true, marks:tMarks, ...pts(tMarks, warm)},
+    {label:"Máxima provável (P90)", data:hs.map(h=>h.p90), borderColor:warm, borderDash:[4,3], borderWidth:1.2, pointRadius:0, spanGaps:true}
+  ]}, options:base("°C", o => { o.plugins.tooltip.callbacks.label = c => `${c.dataset.label}: ${fT(c.raw)} °C`; }), plugins:[marksPlugin]});
+
+  const barCol = hs.map(h => { const it=intensity(h.wet); return css(it?it.c:"--i1"); });
+  chart("bRain", {data:{labels, datasets:[
+    {type:"line", label:"Chance de chuva", data:hs.map(h=>ok(h.prob)?Math.round(h.prob*100):null), borderColor:text, borderWidth:1.3, pointRadius:0, spanGaps:true, yAxisID:"y2", order:0},
+    {type:"bar", label:"Chuva média", data:hs.map(h=>ok(h.pm)&&h.pm>=0.05?h.pm:0), backgroundColor:barCol, barPercentage:1, categoryPercentage:1, yAxisID:"y", order:1, marks:rmk}
+  ]}, options:base("mm/h", o => {
+    o.scales.y.min=0; o.scales.y.suggestedMax=2;
+    o.scales.y2={position:"right", min:0, max:100, ticks:{color:ink, stepSize:50, callback:v=>v+"%"}, grid:{display:false}};
+    o.plugins.tooltip.callbacks.label = c => c.dataset.type==="bar" ? `Chuva média: ${fP(c.raw)} mm/h` : `Chance de chuva: ${c.raw ?? "—"}%`;
+    o.plugins.tooltip.callbacks.afterBody = it => { const x=intensity(hs[it[0].dataIndex].wet); return x?`Se chover: ${x.l}`:""; };
+  }), plugins:[marksPlugin]});
+
+  chart("bWind", {type:"line", data:{labels, datasets:[
+    {label:"Rajada", data:hs.map(h=>h.wg50), borderColor:wind, borderWidth:2, spanGaps:true, marks:gmk, ...pts(gmk, wind)},
+    {label:"_60", data:hs.map(()=>EXT.gust), borderColor:bad+"66", borderWidth:1, borderDash:[2,4], pointRadius:0}
+  ]}, options:base("km/h", o => {
+    o.scales.y.min=0;
+    o.plugins.tooltip.filter = c => c.dataset.label!=="_60";
+    o.plugins.tooltip.callbacks.label = c => `Rajada: ${fI(c.raw)} km/h`;
+    o.plugins.tooltip.callbacks.afterBody = it => { const h=hs[it[0].dataIndex]; return ok(h.dir)?`Vento ${compass(h.dir)} ${fI(h.ws50)} km/h`:""; };
+  }), plugins:[marksPlugin]});
+
+  // começa na hora atual
+  const nowKey = localNow(state.raw.off).slice(0,13);
+  const iNow = Math.max(0, labels.findIndex(t=>t.slice(0,13)>=nowKey));
+  $("scroller").scrollLeft = Math.max(0, iNow*PX - 40);
+}
+function scrollToDay(i){
+  const D=state.data; if(!D) return;
+  const idx = D.days[i].H[0] || 0;
+  $("scroller").scrollTo({left:Math.max(0, idx*PX + 20), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+}
+
+/* ================= render: AVANÇADO ================= */
+function renderRuns(){
+  const el=$("runs"); const meta=state.raw && state.raw.meta || [];
+  el.innerHTML = meta.length ? `<span class="chip">Rodadas (UTC)</span>` + meta.map(m => {
+    const off = state.used[m.name]===false ? ` · <span class="err">sem dados atuais, fora do cálculo</span>` : "";
+    if(!m.init) return `<span class="chip"><b>${m.name}</b> —${off}</span>`;
+    const d=new Date(m.init), age=Math.round((Date.now()-m.init)/36e5);
+    const lab = `${String(d.getUTCDate()).padStart(2,"0")}/${String(d.getUTCMonth()+1).padStart(2,"0")} ${String(d.getUTCHours()).padStart(2,"0")}Z`;
+    const flag = off || (age>36 ? ` · <span class="err">metadado antigo</span>` : "");
+    return `<span class="chip"><b>${m.name}</b> ${lab} · há ${age} h${flag}</span>`;
+  }).join("") : "";
+}
+function renderAdvanced(){
+  const D=state.data; if(!D || state.tab!=="avancado") return;
+  renderRuns();
+  const box=$("days"); box.innerHTML="";
+  D.days.forEach((d,i) => {
+    const dt=new Date(d.date+"T12:00:00"), it=intensity(d.condInt);
+    const b=document.createElement("button");
+    b.type="button"; b.className="day"+(i>=10?" far":""); b.setAttribute("aria-pressed", i===state.sel);
+    const dots = d.perModel.map(pm => `<div class="mrow"><span>${pm.name.replace(/ (ENS|EPS)/,"")} ${pm.hit}/${pm.n}</span><span class="dots">${Array.from({length:pm.n},(_,k)=>`<b class="${k<pm.hit?"on":""}"></b>`).join("")}</span></div>`).join("");
+    b.innerHTML = `
+      <div><div class="dname">${dayName(d.date,i)}</div><div class="ddate">${dt.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}${i>=10?" · tendência":""}</div></div>
+      <div class="cond">${condition(d)}</div>
+      <div class="temps"><span class="tmax">${fT(d.tmax.p50)}°</span><span class="tmin">${fT(d.tmin.p50)}°</span></div>
+      <div class="small mono">Tmáx ${fT(d.tmax.p10)}–${fT(d.tmax.p90)}°</div>
+      <div><span class="big">${pct(d.prob)}</span> <span class="small">chuva ≥ ${fP(D.thr)} mm</span>
+        <div class="bar" style="margin-top:4px"><i style="width:${(d.prob||0)*100}%"></i></div></div>
+      <dl class="kv">
+        <dt>Na área</dt><dd>${pct(d.area)}</dd>
+        <dt>Chuva P50/P90</dt><dd>${fP(d.rain.p50)}/${fP(d.rain.p90)} mm</dd>
+        ${ok(d.prob)&&d.prob>=0.15&&it ? `<dt>Se chover</dt><dd><i class="int" style="background:var(${it.c})"></i>${it.l}</dd>` : ""}
+        <dt>Chuva forte</dt><dd>${pct(d.pStrong)}</dd>
+        <dt>Nuvens</dt><dd>${fI(d.cloud)}%</dd>
+      </dl>
+      <div class="wind">${arrowHTML(d.dir)}<span>${compass(d.dir)} ${fI(d.ws)} km/h · raj. ${fI(d.wg50)}</span>${windAlert(d)}</div>
+      <div class="members">${dots}</div>
+      <div class="row small" style="gap:6px">Chuva ${conf(d.rConf)} Temp ${conf(d.tConf)}${d.nEns && d.nEns<3 ? ` · ${d.nEns} ens.` : ""}</div>`;
+    b.addEventListener("click", () => selectDay(i));
+    box.appendChild(b);
+  });
+  const chips=$("dayChipsAdv"); chips.innerHTML="";
+  D.days.forEach((d,i) => {
+    const b=document.createElement("button"); b.type="button"; b.className="daychip"; b.textContent=dayShort(d.date,i);
+    b.setAttribute("aria-pressed", i===state.sel);
+    b.addEventListener("click", () => selectDay(i));
+    chips.appendChild(b);
+  });
+  renderSummary(); renderDetail(); renderExceed();
+}
+function selectDay(i){
+  state.sel=i;
+  document.querySelectorAll("#days .day").forEach((b,k)=>b.setAttribute("aria-pressed", k===i));
+  document.querySelectorAll("#dayChipsAdv .daychip").forEach((b,k)=>b.setAttribute("aria-pressed", k===i));
+  const chip=$("dayChipsAdv").children[i]; if(chip) chip.scrollIntoView({block:"nearest", inline:"center"});
+  renderDetail();
+}
+function renderSummary(){
+  const D=state.data, ds=D.days;
+  const nm = d => new Date(d.date+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long", day:"numeric"});
+  const wet = ds.filter(d=>ok(d.prob)&&d.prob>=0.5);
+  const top = ds.reduce((a,b)=>(b.prob??-1)>(a.prob??-1)?b:a);
+  const hot = ds.reduce((a,b)=>(b.tmax.p50??-99)>(a.tmax.p50??-99)?b:a);
+  const windy = ds.reduce((a,b)=>(b.wg50??-1)>(a.wg50??-1)?b:a);
+  const tot = ds.slice(0,7).reduce((s,d)=>s+(d.rain.mean||0),0);
+  $("summary").innerHTML = `${wet.length?`<b>${wet.length} de ${ds.length} dias</b> com chance de chuva ≥ 50%.`:"Nenhum dia com chance de chuva acima de 50%."}
+    Maior chance: <b>${nm(top)}</b> (${pct(top.prob)} no ponto, ${pct(top.area)} na área).
+    Mais quente: <b>${nm(hot)}</b>, ~${fT(hot.tmax.p50)} °C.
+    Rajadas mais fortes: <b>${nm(windy)}</b>, ~${fI(windy.wg50)} km/h${ok(windy.pG60)&&windy.pG60>=0.1?` (${pct(windy.pG60)} de chance ≥ 60 km/h)`:""}.
+    Chuva média em 7 dias: <b class="mono">${fP(tot)} mm</b>.`;
+}
+function renderDetail(){
+  const D=state.data, d=D.days[state.sel];
+  $("detailPanel").hidden=false;
+  const dt=new Date(d.date+"T12:00:00");
+  $("detailTitle").textContent = dt.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"});
+  if(typeof Chart==="undefined"){ $("detailTitle").textContent += " (gráficos indisponíveis)"; }
+  else {
+    const H=d.H, labels=H.map(i=>D.master[i].slice(11,13)+"h"), hs=H.map(i=>D.hourly[i]);
+    const cols=[css("--warm"),css("--cool"),css("--cloud")], rain=css("--rain"), warm=css("--warm"), cloud=css("--cloud"), wind=css("--wind"), bad=css("--bad");
+    const detLines = (k, axis) => D.det.map((m,j)=>({type:"line", label:m.model.name, data:H.map(i=>m[k][i]), borderColor:cols[j%3], borderDash:[4,3], borderWidth:1.3, pointRadius:0, spanGaps:true, yAxisID:axis||"y"}));
+    const band = (hi, lo, color) => [
+      {type:"line", label:"_hi", data:hi, borderWidth:0, pointRadius:0, fill:"+1", backgroundColor:color+"33", spanGaps:true},
+      {type:"line", label:"_lo", data:lo, borderWidth:0, pointRadius:0, fill:false, spanGaps:true}];
+
+    chart("cTemp", {type:"line", data:{labels, datasets:[
+      ...band(hs.map(h=>h.p90), hs.map(h=>h.p10), warm),
+      {label:"Mediana ENS", data:hs.map(h=>h.p50), borderColor:warm, borderWidth:2.5, pointRadius:0, spanGaps:true},
+      ...detLines("t")]}, options:opts("°C")});
+
+    const icol = hs.map(h => { const it=intensity(h.wet); return css(it?it.c:"--i1"); });
+    chart("cRain", {data:{labels, datasets:[
+      {type:"bar", label:"Chance ≥ 0,1 mm/h (%)", data:hs.map(h=>ok(h.prob)?Math.round(h.prob*100):null), backgroundColor:icol, yAxisID:"y"},
+      {type:"line", label:"Média ENS (mm/h)", data:hs.map(h=>h.pm), borderColor:rain, borderWidth:2, pointRadius:0, yAxisID:"y2", spanGaps:true},
+      ...detLines("p","y2")]},
+      options:opts("%", o => { o.scales.y.min=0; o.scales.y.max=100;
+        o.scales.y2={position:"right",min:0,title:{display:true,text:"mm/h",color:css("--muted")},ticks:{color:css("--muted")},grid:{display:false}};
+        o.plugins.tooltip={callbacks:{afterBody:it=>{ const h=hs[it[0].dataIndex], x=intensity(h.wet); return x?`Se chover: ${x.l} (~${fP(h.wet)} mm/h)`:""; }}}; })});
+
+    chart("cWind", {type:"line", data:{labels, datasets:[
+      ...band(hs.map(h=>h.ws90), hs.map(h=>h.ws10), wind),
+      {label:"Vento médio P50", data:hs.map(h=>h.ws50), borderColor:wind, borderWidth:2.5, spanGaps:true,
+        pointStyle:"triangle", pointRadius:hs.map((h,k)=>k%3===0&&ok(h.dir)?5:0), pointRotation:hs.map(h=>ok(h.dir)?(h.dir+180)%360:0), pointBackgroundColor:wind, pointBorderWidth:0},
+      {label:"Rajada P50", data:hs.map(h=>h.wg50), borderColor:wind, borderDash:[6,3], borderWidth:1.6, pointRadius:0, spanGaps:true},
+      {label:"Rajada P90", data:hs.map(h=>h.wg90), borderColor:wind, borderDash:[2,3], borderWidth:1.2, pointRadius:0, spanGaps:true},
+      {label:"60 km/h", data:hs.map(()=>60), borderColor:bad, borderWidth:1, pointRadius:0}
+    ]}, options:opts("km/h", o => { o.scales.y.min=0;
+      o.plugins.tooltip={callbacks:{afterBody:it=>{ const h=hs[it[0].dataIndex]; return ok(h.dir)?`Direção: ${compass(h.dir)} (${Math.round(h.dir)}°)`:""; }}}; })});
+
+    chart("cCloud", {type:"line", data:{labels, datasets:[
+      {label:"Mediana ENS", data:hs.map(h=>h.cloud), borderColor:cloud, backgroundColor:cloud+"33", fill:"origin", borderWidth:2, pointRadius:0, spanGaps:true},
+      ...detLines("c")]}, options:opts("%", o => { o.scales.y.min=0; o.scales.y.max=100; })});
+  }
+
+  $("tModels").innerHTML = `<thead><tr><th>Modelo</th><th>Mín</th><th>Máx</th><th>Chuva</th><th>Pico/h</th><th>Vento</th><th>Rajada</th></tr></thead><tbody>` +
+    d.detDay.map(m=>`<tr><td>${m.name}</td><td class="num">${fT(m.tmin)}°</td><td class="num">${fT(m.tmax)}°</td><td class="num">${fP(m.p)}</td><td class="num">${fP(m.pmh)}</td><td class="num">${fI(m.ws)}</td><td class="num">${fI(m.wg)}</td></tr>`).join("") +
+    `<tr><td><b>Ensemble</b></td><td class="num"><b>${fT(d.tmin.p50)}°</b></td><td class="num"><b>${fT(d.tmax.p50)}°</b></td><td class="num"><b>${fP(d.rain.p50)}</b></td><td class="num">—</td><td class="num"><b>${fI(d.ws)}</b></td><td class="num"><b>${fI(d.wg50)}</b></td></tr></tbody>`;
+
+  const it=intensity(d.condInt);
+  $("tStats").innerHTML = `<tbody>
+    <tr><td>Chuva ≥ ${fP(D.thr)} mm: ponto / área</td><td class="num">${pct(d.prob)} / ${pct(d.area)}</td></tr>
+    <tr><td>Desvio entre ensembles</td><td class="num">${ok(d.probSd)?Math.round(d.probSd*100)+" p.p.":"—"}</td></tr>
+    ${d.perModel.map(pm=>`<tr><td>${pm.name}</td><td class="num">${pm.hit}/${pm.n} membros</td></tr>`).join("")}
+    <tr><td>Chuva média / P50 / P90 (mm)</td><td class="num">${fP(d.rain.mean)} / ${fP(d.rain.p50)} / ${fP(d.rain.p90)}</td></tr>
+    <tr><td>Se chover, intensidade</td><td class="num">${it?it.l:"—"}</td></tr>
+    <tr><td>Chance de chuva moderada+ / forte</td><td class="num">${pct(d.pMod)} / ${pct(d.pStrong)}</td></tr>
+    <tr><td>Tmáx P10 / P50 / P90</td><td class="num">${fT(d.tmax.p10)} / ${fT(d.tmax.p50)} / ${fT(d.tmax.p90)}°</td></tr>
+    <tr><td>Tmín P10 / P50 / P90</td><td class="num">${fT(d.tmin.p10)} / ${fT(d.tmin.p50)} / ${fT(d.tmin.p90)}°</td></tr>
+    <tr><td>Vento máx. (${windClass(d.ws)})</td><td class="num">${compass(d.dir)} ${fI(d.ws)} km/h</td></tr>
+    <tr><td>Rajada P50 / P90</td><td class="num">${fI(d.wg50)} / ${fI(d.wg90)} km/h</td></tr>
+    <tr><td>Rajada ≥ 40 / ≥ 60 km/h</td><td class="num">${pct(d.pG40)} / ${pct(d.pG60)}</td></tr>
+    <tr><td>Confiança chuva / temp.</td><td class="num">${conf(d.rConf)} ${conf(d.tConf)}</td></tr>
+  </tbody>`;
+}
+function renderExceed(){
+  const D=state.data; $("exceedPanel").hidden=false;
+  const heat = (v, txt, tok) => `<td class="heat" style="background:color-mix(in srgb, var(${tok||"--rain"}) ${Math.round((v||0)*70)}%, var(--surface));${(v||0)>0.55?"color:#fff":""}">${txt}</td>`;
+  $("tExceed").innerHTML = `<thead><tr><th>Evento</th>${D.days.map((d,i)=>`<th>${dayShort(d.date,i)}</th>`).join("")}</tr></thead><tbody>` +
+    EXCEED.map((t,k)=>`<tr><td>Chuva ≥ ${fP(t)} mm</td>${D.days.map(d=>heat(d.exceed[k].area??d.exceed[k].point, `${pct(d.exceed[k].point)}/${pct(d.exceed[k].area)}`)).join("")}</tr>`).join("") +
+    `<tr><td>Chuva forte ≥ 10 mm/h</td>${D.days.map(d=>heat(d.pStrong, pct(d.pStrong))).join("")}</tr>` +
+    `<tr><td>Rajada ≥ 40 km/h</td>${D.days.map(d=>heat(d.pG40, pct(d.pG40), "--wind")).join("")}</tr>` +
+    `<tr><td>Rajada ≥ 60 km/h</td>${D.days.map(d=>heat(d.pG60, pct(d.pG60), "--wind")).join("")}</tr></tbody>`;
+}
+
+/* ================= abas e fluxo ================= */
+function setTabUI(name){
+  state.tab=name;
+  ["basico","avancado"].forEach(t => { $("tab-"+t).setAttribute("aria-selected", t===name); $("pane-"+t).hidden = t!==name; });
+}
+function showTab(name){
+  setTabUI(name);
+  try{ history.replaceState(null, "", "#"+name); }catch(e){}
+  store("tab", name);
+  if(name==="basico") renderBasic(); else renderAdvanced();
+}
+function compute(){
+  if(!state.raw) return;
+  const raw = structuredClone({det:state.raw.det, ens:state.raw.ens, area:state.raw.area});
+  state.data = process(raw.det, raw.ens, raw.area, parseFloat($("thr").value), state.days);
+  state.sel = Math.min(state.sel, state.data.days.length-1);
+  if(state.tab==="basico") renderBasic(); else renderAdvanced();
+}
+const sel = (list, box) => list.filter(m => $(box+"_"+m.key).checked);
+
+async function run(){
+  const lat=parseFloat(String($("lat").value).replace(",",".")), lon=parseFloat(String($("lon").value).replace(",","."));
+  if(!ok(lat)||!ok(lon)||Math.abs(lat)>90||Math.abs(lon)>180){ setStatus("Informe latitude e longitude válidas, ou busque uma cidade.", true); return; }
+  state.lat=lat; state.lon=lon; state.days=parseInt($("ndays").value,10);
+  $("placeName").textContent = state.name || "Ponto selecionado";
+  $("placeCoords").textContent = `${lat.toFixed(3)}, ${lon.toFixed(3)}`;
+  saveSettings();
+  const km=parseFloat($("radius").value), dets=sel(DET,"det"), enss=sel(ENS,"ens");
+  if(!dets.length && !enss.length){ setStatus("Selecione pelo menos um modelo na aba Avançado.", true); return; }
+  setStatus("Buscando previsões…"); $("btnRun").disabled=true;
+  const t0=performance.now(), pts=ring(lat,lon,km);
+  const [rd, re, ra, meta] = await Promise.all([
+    Promise.allSettled(dets.map(m=>fetchDet(m,lat,lon,state.days))),
+    Promise.allSettled(enss.map(m=>fetchEns(m,lat,lon,state.days))),
+    km ? Promise.allSettled(enss.map(m=>fetchArea(m,pts,state.days))) : Promise.resolve([]),
+    Promise.all([...dets.map(m=>fetchMeta(m,API)), ...enss.map(m=>fetchMeta(m,EAPI))])
+  ]);
+  $("btnRun").disabled=false;
+  const good = r => r.filter(x=>x.status==="fulfilled").map(x=>x.value);
+  const fail = [...rd.map((r,i)=>[r,dets[i].name]), ...re.map((r,i)=>[r,enss[i].name])].filter(([r])=>r.status==="rejected").map(([,n])=>n);
+  const det=good(rd), ens=good(re), area=good(ra);
+  if(!det.length && !ens.length){
+    const e0=[...rd,...re].find(x=>x.status==="rejected");
+    setStatus(e0 && netErr(e0.reason) ? NET_HINT : "Não foi possível obter dados. Verifique a conexão e tente de novo.", true); return;
+  }
+  state.raw = {det, ens, area, meta, off:(det[0]||ens[0]).off};
+  const today0 = localNow(state.raw.off).slice(0,10), used = {};
+  const hasNow = (time, arr) => time.some((t,i)=>t.slice(0,10)>=today0 && ok(arr[i]));
+  det.forEach(d => used[d.model.name] = hasNow(d.time, d.t));
+  ens.forEach(e => used[e.model.name] = e.mem.some(m => hasNow(e.time, m.t)));
+  [...dets, ...enss].forEach(m => { if(!(m.name in used)) used[m.name]=false; });
+  state.used = used;
+  compute();
+  const nm=ens.reduce((s,e)=>s+e.mem.length,0);
+  setStatus(`${det.length} determinísticos · ${ens.length} ensembles (${nm} membros)${km?` · área com ${pts.length} pontos`:""} · ${dec((performance.now()-t0)/1000,1)} s${fail.length?` · falhou: ${fail.join(", ")}`:""}`, false);
+}
+
+async function search(){
+  const name=$("q").value.trim(); if(!name) return;
+  setStatus("Buscando cidade…");
+  try{
+    const j=await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=6&language=pt&format=json`);
+    const ul=$("results"); ul.innerHTML="";
+    if(!j.results||!j.results.length){ setStatus("Nenhuma cidade encontrada com esse nome.", true); return; }
+    setStatus("");
+    j.results.forEach(r => {
+      const li=document.createElement("li"), b=document.createElement("button");
+      b.type="button"; b.textContent=[r.name,r.admin1,r.country].filter(Boolean).join(", ");
+      b.addEventListener("click", () => { $("lat").value=r.latitude.toFixed(4); $("lon").value=r.longitude.toFixed(4); state.name=[r.name,r.admin1].filter(Boolean).join(", "); ul.innerHTML=""; run(); });
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }catch(e){ setStatus(netErr(e) ? NET_HINT : "Falha na busca de cidade: "+e.message, true); }
+}
+function geo(){
+  if(!navigator.geolocation){ setStatus("Este navegador não oferece geolocalização. Busque a cidade.", true); return; }
+  setStatus("Obtendo localização…");
+  navigator.geolocation.getCurrentPosition(p => {
+    $("lat").value=p.coords.latitude.toFixed(4); $("lon").value=p.coords.longitude.toFixed(4); state.name="Minha localização"; run();
+  }, () => setStatus("Localização negada ou indisponível. Busque a cidade ou digite lat/lon.", true), {timeout:10000});
+}
+function saveSettings(){
+  store("cfg", {lat:state.lat, lon:state.lon, name:state.name, days:$("ndays").value, thr:$("thr").value, radius:$("radius").value,
+    det:DET.filter(m=>$("det_"+m.key).checked).map(m=>m.key), ens:ENS.filter(m=>$("ens_"+m.key).checked).map(m=>m.key)});
+}
+
+/* ================= init ================= */
+(function init(){
+  const cfg = load("cfg") || {};
+  const mk = (list, box, el, on) => list.forEach(m => {
+    const l=document.createElement("label"); l.className="check"; l.htmlFor=box+"_"+m.key;
+    l.innerHTML=`<input type="checkbox" id="${box}_${m.key}" ${!on||on.includes(m.key)?"checked":""}> ${m.name}`;
+    $(el).appendChild(l);
+  });
+  mk(DET,"det","detModels",cfg.det); mk(ENS,"ens","ensModels",cfg.ens);
+  if(cfg.days) $("ndays").value=cfg.days;
+  if(cfg.thr) $("thr").value=cfg.thr;
+  if(cfg.radius) $("radius").value=cfg.radius;
+  if(ok(cfg.lat)){ $("lat").value=cfg.lat; $("lon").value=cfg.lon; state.name=cfg.name||""; }
+  else { $("lat").value="-23.5505"; $("lon").value="-46.6333"; state.name="São Paulo, SP"; }
+
+  $("tab-basico").addEventListener("click", () => showTab("basico"));
+  $("tab-avancado").addEventListener("click", () => showTab("avancado"));
+  $("btnSearch").addEventListener("click", search);
+  $("q").addEventListener("keydown", e => { if(e.key==="Enter") search(); });
+  $("btnGeo").addEventListener("click", geo);
+  $("btnRun").addEventListener("click", run);
+  $("thr").addEventListener("change", () => { saveSettings(); compute(); });
+  $("radius").addEventListener("change", () => state.raw && run());
+  $("ndays").addEventListener("change", () => state.raw && run());
+  ["lat","lon"].forEach(id => $(id).addEventListener("input", () => { state.name=""; }));
+  document.querySelectorAll("#detModels input,#ensModels input").forEach(i => i.addEventListener("change", () => { saveSettings(); if(state.raw) run(); }));
+
+  setTabUI(location.hash==="#avancado" ? "avancado" : location.hash==="#basico" ? "basico" : (load("tab")||"basico"));
+  run();
+})();
+</script>
+</body>
+</html>
